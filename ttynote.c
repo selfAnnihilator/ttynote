@@ -128,7 +128,7 @@ void editorDrawRows(struct abuf *ab) {
     for (y = 0; y < E.screenrows; y++){
         if (y == E.screenrows / 3) {
             char welcome[80];
-            int welcomelen = snprintf(welcome, sizeof(welcome), "TTYnote -- version %s", TTYNOTE_VERSION);
+            int welcomelen = snprintf(welcome, sizeof(welcome), "TTYnote: Zero distractions. Just text. v%s", TTYNOTE_VERSION);
             if (welcomelen > E.screencols) welcomelen = E.screencols;
             int padding = (E.screencols - welcomelen) / 2;
             if (padding) {
