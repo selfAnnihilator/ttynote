@@ -1,5 +1,9 @@
 /**** includes ****/
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -162,15 +166,26 @@ int getWindowSize(int *rows, int *cols) {
 
 /**** file i/o ****/
 
-void editorOpen() {
-    char *line = "Hello, World!";
-    ssize_t linelen = 13;
+void editorOpen(char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) die("fopen");
 
-    E.row.size = linelen;
-    E.row.chars = malloc(linelen + 1);
-    memcpy(E.row.chars, line, linelen);
-    E.row.chars[linelen] = '\0';
-    E.numrows = 1;
+    char *line = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+    linelen = getline(&line, &linecap, fp);
+    if(linelen != -1) {
+        while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r')){
+            linelen--;
+        }
+        E.row.size = linelen;
+        E.row.chars = malloc(linelen + 1);
+        memcpy(E.row.chars, line, linelen);
+        E.row.chars[linelen] = '\0';
+        E.numrows = 1;
+    }
+    free(line);
+    fclose(fp);
 }
 
 
@@ -203,7 +218,7 @@ void editorDrawRows(struct abuf *ab) {
     int y;
     for (y = 0; y < E.screenrows; y++){
         if (y >= E.numrows) {
-            if (y == E.screenrows / 3) {
+            if (E.numrows == 0 && y == E.screenrows / 3) {
             char welcome[80];
             int welcomelen = snprintf(welcome, sizeof(welcome), "TTYnote: Zero distractions. Just text. v%s", TTYNOTE_VERSION);
             if (welcomelen > E.screencols) welcomelen = E.screencols;
@@ -317,10 +332,12 @@ void initEditor() {
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     enableRawMode();
     initEditor();
-    editorOpen();
+    if(argc >= 2){
+        editorOpen(argv[1]);
+    }
 
     while(1) {
         editorRefreshScreen();
