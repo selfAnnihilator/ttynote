@@ -108,8 +108,8 @@ int editorReadKey() {
                         case 1: return HOME_KEY;
                         case 3: return DEL_KEY;
                         case 4: return END_KEY;
-                        case 5: return PAGE_UP;
-                        case 6: return PAGE_DOWN;
+                        case '5': return PAGE_UP;
+                        case '6': return PAGE_DOWN;
                         case 7: return HOME_KEY;
                         case 8: return END_KEY;
                     }
@@ -400,15 +400,23 @@ void editorProcessKeypress() {
             break;
 
         case END_KEY:
-            E.cx = E.screencols - 1;
+            if (E.cy < E.numrows)
+                E.cx = E.row[E.cy].size;
             break;
         
         case PAGE_UP:
         case PAGE_DOWN:
             {
+                if(c == PAGE_UP){
+                    E.cy = E.rowoff;
+                } else if(c == PAGE_DOWN){
+                    E.cy = E.rowoff + E.screenrows - 1;
+                    if (E.cy > E.numrows) E.cy = E.numrows;
+                }
+
                 int times = E.screenrows;
                 while (times--) 
-                    editorMoveCursor(c == PAGE_UP ? PAGE_DOWN : ARROW_DOWN);
+                    editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
             }
             break;
 
