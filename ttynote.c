@@ -121,7 +121,7 @@ int editorReadKey() {
                 if (seq[2] == '~') {
                     switch (seq[1]) {
                         case 1: return HOME_KEY;
-                        case 3: return DEL_KEY;
+                        case '3': return DEL_KEY;
                         case 4: return END_KEY;
                         case '5': return PAGE_UP;
                         case '6': return PAGE_DOWN;
@@ -237,12 +237,34 @@ void editorAppendRow(char *s, size_t len) {
     E.dirty++;
 }
 
+void editorFreeRow(erow *row) {
+    free(row->render);
+    free(row->chars);
+}
+
+void editorDelRows(int at) {
+    if(at < 0 || at >= E.numrows) return;
+    editorFreeRow(&E.row[at]);
+    memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (E.numrows - at - 1));
+    E.numrows--;
+    E.dirty++;
+}
+
 void editorRowInsertChar(erow *row, int at, int c) {
     if(at < 0 || at > row->size) at = row->size;
     row->chars = realloc(row->chars, row->size + 2);
     memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
     row->size++;
     row->chars[at] = c;
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
+void editorRowAppendString(erow *row, char *s, size_t len) {
+    row->chars = realloc(row->chars, row->size + len + 1);
+    memcpy(&row->chars[row->size], s, len);
+    row->size += len;
+    row->chars[row->size] = '\0';
     editorUpdateRow(row);
     E.dirty++;
 }
@@ -268,11 +290,17 @@ void editorInsertChar(int c) {
 
 void editorDelChar() {
     if(E.cy == E.numrows) return;
+    if(E.cx == 0 && E.cy == 0) return;
 
     erow *row = &E.row[E.cy];
     if(E.cx > 0){
         editorRowDelChar(row, E.cx - 1);
         E.cx--;
+    } else {
+        E.cx = E.row[E.cy - 1].size;
+        editorRowAppendString(&E.row[E.cy - 1], row->chars, row->size);
+        editorDelRows(E.cy);
+        E.cy--;
     }
 }
 
