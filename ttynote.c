@@ -36,7 +36,11 @@ enum editorKey {
     HOME_KEY,
     END_KEY,
     PAGE_UP,
-    PAGE_DOWN
+    PAGE_DOWN,
+    MOUSE_SCROLL_UP,    // New mouse scroll up
+    MOUSE_SCROLL_DOWN,  // New mouse scroll down
+    MOUSE_LEFT_CLICK,        // For click support
+    MOUSE_RELEASE,
 };
 
 enum editorHighlight {
@@ -86,6 +90,10 @@ struct editorConfig {
     int numrows;
     erow *row;
     int dirty;
+    int mouse_scroll_sensitivity;  // Lines to scroll per mouse event
+    int mouse_scroll_accumulator;  // For smooth scrolling
+    int mouse_x, mouse_y;         // Mouse screen coordinates
+    int mouse_pressed;            // Mouse button state
     char *filename;
     char statusmsg[80];
     time_t statusmsg_time;
@@ -123,6 +131,13 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int));
 
 /**** terminal ****/
 
+void disableCharacterEcho() {
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag &= ~ECHO;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &term);
+}
+
 void die(const char *s){
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
@@ -132,22 +147,40 @@ void die(const char *s){
 }
 
 void disableRawMode() {
-    if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.origTermios) == -1) die("tcsetattr");
+    // Disable all mouse tracking modes
+    write(STDOUT_FILENO, "\x1b[?1006l", 8);
+    write(STDOUT_FILENO, "\x1b[?1002l", 8);
+    write(STDOUT_FILENO, "\x1b[?1000l", 8);
+    fsync(STDOUT_FILENO);
+    
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.origTermios) == -1) die("tcsetattr");
 }
 
 void enableRawMode() {
-    if(tcgetattr(STDIN_FILENO, &E.origTermios) == -1) die("tcgetattr");
+    if (tcgetattr(STDIN_FILENO, &E.origTermios) == -1) die("tcgetattr");
     atexit(disableRawMode);
+    
     struct termios raw = E.origTermios;
-
-    raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+    // Disable all input processing
+    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+    // Disable all output processing
     raw.c_oflag &= ~(OPOST);
+    // Set 8-bit chars
     raw.c_cflag |= (CS8);
+    // Disable echo, canonical mode, and signals
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    // Minimum bytes needed for read to return
     raw.c_cc[VMIN] = 0;
-    raw.c_cc[VTIME] = 0;
-
-    if(tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
+    // Maximum wait time for read (1/10 second)
+    raw.c_cc[VTIME] = 1;
+    
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
+    
+    // Enable extended mouse tracking modes
+    write(STDOUT_FILENO, "\x1b[?1000h", 8);  // Enable basic mouse tracking
+    write(STDOUT_FILENO, "\x1b[?1002h", 8);  // Enable mouse drag events
+    write(STDOUT_FILENO, "\x1b[?1006h", 8);  // Enable SGR extended mode
+    fsync(STDOUT_FILENO);
 }
 
 int editorReadKey() {
@@ -157,14 +190,62 @@ int editorReadKey() {
         if (nread == -1 && errno != EAGAIN) die("read");
     }
 
-    if (c == '\x1b') {
-        char seq[3];
-
+     if (c == '\x1b') {
+        char seq[4];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
 
+        // Check for mouse events in format \x1b[<Cb;Cx;Cy(M or m)
         if (seq[0] == '[') {
-            if (seq[1] >= '0' && seq[1] <= '9') {
+            if (seq[1] == 'M') {
+                // X10 mouse encoding - consume the next byte
+                if (read(STDIN_FILENO, &seq[2], 1) == 1) {
+                    // Check for scroll events (button codes 64 and 65)
+                    if ((unsigned char)seq[2] >= 64 && (unsigned char)seq[2] <= 65) {
+                        return (seq[2] == 64) ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN;
+                    }
+
+                    unsigned char b = seq[2];
+                    // Save mouse coordinates (1-based to 0-based)
+                    E.mouse_x = (unsigned char)seq[3] - 33;
+                    E.mouse_y = (unsigned char)seq[4] - 33;
+                    
+                    if ((b & 0xE0) == 0x20) { // Press event
+                        int button = (b & 0x3);
+                        switch (button) {
+                            case 0: return MOUSE_LEFT_CLICK;
+                        }
+                    }
+                    return MOUSE_RELEASE;
+                }
+            }
+            else if (seq[1] == '<') {
+                // SGR mouse encoding - read full sequence
+                char buf[16];
+                int i = 0;
+                while (i < sizeof(buf) - 1) {
+                    if (read(STDIN_FILENO, &buf[i], 1) != 1) break;
+                    if (buf[i] == 'M' || buf[i] == 'm') break;
+                    i++;
+                }
+                buf[i] = '\0';
+                
+                int button, x, y;
+                if (sscanf(buf, "%d;%d;%d", &button, &x, &y) == 3) {
+                    // Save mouse coordinates (1-based to 0-based)
+                    E.mouse_x = x - 1;
+                    E.mouse_y = y - 1;
+                    
+                    if (strstr(buf, "m")) { // Release event
+                        return MOUSE_RELEASE;
+                    }
+                    switch (button) {
+                        case 0: return MOUSE_LEFT_CLICK;
+                        case 64: return MOUSE_SCROLL_UP;
+                        case 65: return MOUSE_SCROLL_DOWN;
+                    }
+                }
+            } else if (seq[1] >= '0' && seq[1] <= '9') {
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) return '\x1b';
                 if (seq[2] == '~') {
                     switch (seq[1]) {
@@ -195,9 +276,8 @@ int editorReadKey() {
         }
 
         return '\x1b';
-    } else {
-        return c;
-    }
+    } 
+    return c;
 }
 
 int getCursorPosition(int *rows, int *cols) {
@@ -508,6 +588,20 @@ void editorRowDelChar(erow *row, int at) {
     E.dirty++;
 }
 
+void editorScreenToFileCoords(int screen_x, int screen_y, int *file_x, int *file_y) {
+    *file_y = E.rowoff + screen_y;
+    if (*file_y >= E.numrows) *file_y = E.numrows - 1;
+    if (*file_y < 0) *file_y = 0;
+    
+    if (*file_y < E.numrows) {
+        erow *row = &E.row[*file_y];
+        *file_x = editorRowRxToCx(row, E.coloff + screen_x);
+        if (*file_x > row->size) *file_x = row->size;
+    } else {
+        *file_x = 0;
+    }
+}
+
 
 /**** editor operations ****/
 
@@ -724,6 +818,33 @@ void abFree(struct abuf *ab) {
 
 
 /**** output ****/
+
+void editorMouseScroll(int direction) {
+    // Scroll by 1/3 of screen height or at least 1 line
+    int scroll_amount = E.screenrows / 3;
+    if (scroll_amount < 1) scroll_amount = 1;
+    
+    // Apply scroll
+    E.rowoff += direction * scroll_amount;
+    
+    // Boundary checks
+    if (E.rowoff < 0) E.rowoff = 0;
+    if (E.numrows > E.screenrows) {
+        if (E.rowoff > E.numrows - E.screenrows) {
+            E.rowoff = E.numrows - E.screenrows;
+        }
+    } else {
+        E.rowoff = 0;
+    }
+    
+    // Keep cursor visible
+    if (E.cy < E.rowoff) {
+        E.cy = E.rowoff;
+    } else if (E.cy >= E.rowoff + E.screenrows) {
+        E.cy = E.rowoff + E.screenrows - 1;
+        if (E.cy >= E.numrows) E.cy = E.numrows - 1;
+    }
+}
 
 void editorScroll() {
     E.rx = 0;
@@ -944,6 +1065,25 @@ void editorMoveCursor(int key) {
     }
 }
 
+void editorHandleMouseEvent(int key) {
+    switch (key) {
+        case MOUSE_LEFT_CLICK: {
+            E.mouse_pressed = 1;
+            
+            int file_x, file_y;
+            editorScreenToFileCoords(E.mouse_x, E.mouse_y, &file_x, &file_y);
+            
+            E.cy = file_y;
+            E.cx = file_x;
+            break;
+        }
+            
+        case MOUSE_RELEASE:
+            E.mouse_pressed = 0;
+            break;
+    }
+}
+
 void editorProcessKeypress() {
     static int quit_times = TTYNOTE_QUIT_TIMES;
 
@@ -1006,7 +1146,19 @@ void editorProcessKeypress() {
                     editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
             }
             break;
-
+        case MOUSE_LEFT_CLICK:
+        // case MOUSE_RIGHT_CLICK:
+        // case MOUSE_MIDDLE_CLICK:
+        case MOUSE_RELEASE:
+        // case MOUSE_DRAG:
+            editorHandleMouseEvent(c);
+            return;
+        case MOUSE_SCROLL_UP:
+            editorMouseScroll(-1); // Scroll up
+            break;
+        case MOUSE_SCROLL_DOWN:
+            editorMouseScroll(1); // Scroll down
+            break;
         case ARROW_UP:
         case ARROW_DOWN:
         case ARROW_LEFT:
@@ -1027,7 +1179,6 @@ void editorProcessKeypress() {
 }
 
 
-
 /**** init ****/
 
 void initEditor() {
@@ -1043,6 +1194,13 @@ void initEditor() {
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
+    E.mouse_scroll_sensitivity = 1;
+    E.mouse_scroll_accumulator = 0;
+    E.mouse_x = 0;
+    E.mouse_y = 0;
+    E.mouse_pressed = 0;
+
+    disableCharacterEcho();
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
     E.screenrows -= 2;
