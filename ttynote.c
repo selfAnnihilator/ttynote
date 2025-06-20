@@ -20,7 +20,7 @@
 
 /**** defines ****/
 
-#define TTYNOTE_VERSION "0.0.1"
+#define TTYNOTE_VERSION "0.1"
 #define TTYNOTE_TAB_STOP 8
 #define TTYNOTE_QUIT_TIMES 3
 
@@ -222,7 +222,7 @@ int editorReadKey() {
             else if (seq[1] == '<') {
                 // SGR mouse encoding - read full sequence
                 char buf[16];
-                int i = 0;
+                size_t i = 0;
                 while (i < sizeof(buf) - 1) {
                     if (read(STDIN_FILENO, &buf[i], 1) != 1) break;
                     if (buf[i] == 'M' || buf[i] == 'm') break;
@@ -1209,10 +1209,25 @@ void initEditor() {
 int main(int argc, char *argv[]) {
     enableRawMode();
     initEditor();
+    if (argc > 1) {
+        if (strcmp(argv[1], "--version") == 0) {
+            printf("TTYnote version %s\n", TTYNOTE_VERSION);
+            return 0;
+        } else if (strcmp(argv[1], "--help") == 0) {
+            printf("Usage: ttynote [--help] [--version]\r\n");
+            printf("  --help       Show this help message\r\n");
+            printf("  --version    Show the version of ttynote\n");
+            return 0;
+        } else {
+            fprintf(stderr, "Unknown option: %s\n", argv[1]);
+            fprintf(stderr, "Try 'ttynote --help' for usage.\n");
+            return 1;
+        }
+    }
     if(argc >= 2){
         editorOpen(argv[1]);
     }
-
+    
     editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
     while(1) {
