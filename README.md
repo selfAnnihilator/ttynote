@@ -58,7 +58,7 @@ This will build and install TTYnote via the PKGBUILD script.
 
 ## Install via AUR
 
-TTYnote is available on the AUR as `ttynote`.
+You can install `ttynote` from the [AUR](https://aur.archlinux.org/packages/ttynote) using an AUR helper like [`paru`](https://github.com/Morganamilo/paru).
 
 ### Option 1: Using an AUR helper
 
