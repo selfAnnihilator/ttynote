@@ -1,97 +1,87 @@
-# TTYnote - Terminal-Based Text Editor
+# TTYnote
 
-TTYnote is a lightweight, terminal-based text editor written in C, inspired by [kilo](https://github.com/antirez/kilo). It features syntax highlighting, search functionality, status messages, and responsive real-time editing inside the terminal. Perfect for programmers who want a minimal, fast, and customizable coding experience.
-
----
-
-## 🚀 Features
-
-* Syntax highlighting for code (with support for numbers, strings, and comments)
-* Search with highlighted matches
-* Multi-line comment awareness
-* Status bar and message area
-* Real-time screen refresh with smooth cursor movement
-* Handles tab expansion, scrolling, and resizing
+TTYnote is a minimal, terminal-based text editor written in C. It is designed for fast note-taking and editing directly in the terminal, without the overhead of full-featured GUI editors.
 
 ---
 
-## 🧰 Requirements
+## Features
 
-* GCC or any C compiler
-* Linux/macOS terminal (tested on Unix-like environments)
-* POSIX-compliant system for `termios`, `unistd.h`, etc.
+* Lightweight and fast
+* Written in pure C
+* Mouse support
+* Basic navigation and editing
+* Save and quit shortcuts
+* Command-line options:
+
+  * `--help` : Display usage help
+  * `--version` : Show version information
 
 ---
 
-## 🧰 Installation
+## Usage
 
-1. **Clone the repository**
+```sh
+ttynote [filename]
+```
 
-```bash
+If no filename is provided, TTYnote opens a blank buffer.
+
+---
+
+## Keybindings
+
+| Key          | Action                     |
+| ------------ | -------------------------- |
+| Ctrl + S     | Save                       |
+| Ctrl + Q     | Quit                       |
+| Ctrl + F     | Search                     |
+| Arrow Keys   | Move cursor                |
+| Page Up/Down | Scroll vertically          |
+| Home/End     | Jump to start/end of line  |
+| Mouse Click  | Move cursor (if supported) |
+
+---
+
+## Build & Install
+
+### Build using PKGBUILD
+
+```sh
 git clone https://github.com/G0D-SLAYER/ttynote.git
 cd ttynote
+makepkg -si
 ```
 
-2. **Compile the source code**
-
-```bash
-make
-```
-
-> If there's no `Makefile`, you can compile manually:
-
-```bash
-gcc -o ttynote ttynote.c -Wall
-```
+This will build and install TTYnote via the PKGBUILD script.
 
 ---
 
-## ▶️ Running the Editor
+## Install via AUR
 
-```bash
-./ttynote filename.txt
+TTYnote is available on the AUR as `ttynote`.
+
+### Option 1: Using an AUR helper
+
+```sh
+yay -S ttynote
+# or
+paru -S ttynote
 ```
 
-* If the file exists, it will open for editing.
-* If it doesn't exist, a new file will be created when saved.
+### Option 2: Manual install using pacman
 
----
-
-## 📂 Saving & Exiting
-
-* Press `Ctrl-S` to save the file
-* Press `Ctrl-Q` to quit the editor
-* Press `Ctrl-F` to search within the file
-
----
-
-## 📂 File Structure (if applicable)
-
-```
-ttynote/
-├── ttynote.c        # Main source code
-├── syntax.h         # Syntax rules (optional modularization)
-├── Makefile         # Build script (if present)
-└── README.md        # Project documentation
+```sh
+# Download the .pkg.tar.zst file from the AUR or build it locally with makepkg
+sudo pacman -U ttynote-<version>.pkg.tar.zst
 ```
 
----
-
-## 📖 Inspiration
-
-This project was heavily inspired by the ["Build Your Own Text Editor"](https://viewsourcecode.org/snaptoken/kilo/) tutorial and the `kilo` text editor.
+Replace `<version>` with the actual version string of the built package.
 
 ---
 
-## 🧑‍💻 Author
+## License
 
-**Abhinav Pankajakshan**
-📍 Vadodara, India
-📧 [abhinavpankajakshan34@gmail.com](mailto:abhinavpankajakshan34@gmail.com)
-🔗 [LinkedIn](https://www.linkedin.com/in/abhinav-pankajakshan)
+MIT License
 
 ---
 
-## 💪 License
-
-MIT License – feel free to use and modify!
