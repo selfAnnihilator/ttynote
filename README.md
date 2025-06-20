@@ -81,7 +81,7 @@ Replace `<version>` with the actual version string of the built package.
 
 ## License
 
-MIT License
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
